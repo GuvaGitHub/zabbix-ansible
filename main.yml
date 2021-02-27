@@ -1,0 +1,4 @@
+- name: main
+  hosts: admin
+  roles:
+    - { role: zabbix, tags: zabbix }

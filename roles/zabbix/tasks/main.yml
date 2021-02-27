@@ -1,0 +1,82 @@
+---
+
+- name: sethostname
+  hostname:
+    name: "{{ hostname }}"
+
+- name: Downloading Zabbix repo
+  get_url:
+    url: https://repo.zabbix.com/zabbix/4.2/ubuntu/pool/main/z/zabbix-release/zabbix-release_4.2-3%2Bbionic_all.deb
+    dest: /tmp/zabbix_repo.deb
+    mode: 0755
+
+- name: Installing Zabbix repo
+  shell: sudo dpkg -i /tmp/zabbix_repo.deb
+
+- name: Updating repo
+  apt: update_cache=yes
+
+- name: Installing packages
+  apt:
+    state: present
+    name:
+      - apache2
+      - libapache2-mod-php
+      - mysql-server
+      - php
+      - php-mbstring
+      - php-gd
+      - php-xml
+      - php-bcmath
+      - php-ldap
+      - php-mysql
+      - zabbix-server-mysql
+      - zabbix-frontend-php
+      - zabbix-agent
+      - python3-pip
+  tags: packages
+
+- name: Install pymysql
+  shell: pip3 install pymysql
+
+- name: Setting Timezone for PHP
+  template:
+    src: php.ini
+    dest: /etc/php/7.2/apache2/php.ini
+
+- name: Create /root/.my.cnf
+  template:
+    src: my.cnf
+    dest: /root/.my.cnf
+  tags: db
+
+- name: Create database for zabbix
+  mysql_db:
+    name: "{{ zabbix_db_name }}"
+    state: present
+    collation: utf8_bin
+    encoding: utf8
+  tags: db
+
+- name: Create zabbix  dabatase user
+  mysql_user: name={{ zabbix_db_user }} password={{ zabbix_db_password }} priv={{ zabbix_db_name }}.*:ALL host='localhost' state=present
+  no_log: True
+  tags: db
+
+- name: Load Zabbix DB schema
+  mysql_db:
+    name: "{{ zabbix_db_name }}"
+    state: import
+    target: /usr/share/doc/zabbix-server-mysql/create.sql.gz
+
+- name: Editing Zabbix conf file
+  template:
+    src: zabbix_server.conf
+    dest: /etc/zabbix/zabbix_server.conf
+  notify: Restart-Services
+
+- name: Restart zabbix
+  service:
+    state: restarted
+    name: zabbix-server
+    enabled: yes
